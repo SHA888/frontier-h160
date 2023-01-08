@@ -21,6 +21,10 @@ features = ['derive']
 package = 'parity-scale-codec'
 version = '3.0.0'
 
+[dependencies.account]
+path = "../primitives/account/"
+default-features = false
+
 [dependencies.fp-rpc]
 default-features = false
 git = 'https://github.com/paritytech/frontier.git'
@@ -188,7 +192,7 @@ git = 'https://github.com/paritytech/substrate'
 branch = 'master'
 default-features = false
 git = 'https://github.com/paritytech/substrate'
-version = '4.0.0'
+version = '5.0.0'
 
 [dependencies.sp-transaction-pool]
 branch = 'master'

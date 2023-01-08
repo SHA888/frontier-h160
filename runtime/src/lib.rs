@@ -9,6 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use codec::{Decode, Encode};
+use frame_system::Origin;
 use pallet_evm::FeeCalculator;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -29,6 +30,8 @@ use sp_runtime::{
 	ApplyExtrinsicResult, MultiSignature,
 };
 use sp_std::{marker::PhantomData, prelude::*};
+use pallet_ethereum::Call::transact;
+
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -39,13 +42,13 @@ pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{ConstU32, ConstU8, FindAuthor, KeyOwnerProofSystem, Randomness},
 	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	ConsensusEngineId, StorageValue,
 };
 pub use pallet_balances::Call as BalancesCall;
-use pallet_ethereum::{Call::transact, Transaction as EthereumTransaction};
+use pallet_ethereum::{Call, Transaction as EthereumTransaction};
 use pallet_evm::{Account as EVMAccount, EnsureAddressTruncated, HashedAddressMapping, Runner};
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::CurrencyAdapter;
@@ -160,7 +163,7 @@ impl frame_system::Config for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
-	type Call = Call;
+	type Call = Call<T>;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
 	/// The index type for storing how many extrinsics an account has signed.
@@ -176,7 +179,7 @@ impl frame_system::Config for Runtime {
 	/// The ubiquitous event type.
 	type Event = Event;
 	/// The ubiquitous origin type.
-	type Origin = Origin;
+	type Origin = Origin<T>;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 	/// The weight of database operations that the runtime can invoke.
@@ -200,6 +203,11 @@ impl frame_system::Config for Runtime {
 	/// The set code logic, just the default since we're not a parachain.
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+
+
 }
 
 parameter_types! {
@@ -213,8 +221,8 @@ impl pallet_aura::Config for Runtime {
 }
 
 impl pallet_grandpa::Config for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 
 	type KeyOwnerProofSystem = ();
 
@@ -266,6 +274,7 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
 }
 
 parameter_types! {
@@ -278,11 +287,12 @@ impl pallet_transaction_payment::Config for Runtime {
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
 	type FeeMultiplierUpdate = ();
+	type RuntimeEvent = ();
 }
 
 impl pallet_sudo::Config for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 }
 
 pub struct FindAuthorTruncated<F>(PhantomData<F>);
@@ -307,13 +317,13 @@ parameter_types! {
 
 impl pallet_evm::Config for Runtime {
 	type FeeCalculator = BaseFee;
-	type GasWeightMapping = ();
+	type GasWeightMapping = GasWeightMapping;
 	type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
 	type CallOrigin = EnsureAddressTruncated;
 	type WithdrawOrigin = EnsureAddressTruncated;
 	type AddressMapping = HashedAddressMapping<BlakeTwo256>;
 	type Currency = Balances;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Runner = pallet_evm::runner::stack::Runner<Self>;
 	type PrecompilesType = FrontierPrecompiles<Self>;
 	type PrecompilesValue = PrecompilesValue;
@@ -321,11 +331,12 @@ impl pallet_evm::Config for Runtime {
 	type BlockGasLimit = BlockGasLimit;
 	type OnChargeTransaction = ();
 	type FindAuthor = FindAuthorTruncated<Aura>;
+	type WeightPerGas = WeightPerGas;
 }
 
 impl pallet_ethereum::Config for Runtime {
-	type Event = Event;
 	type StateRoot = pallet_ethereum::IntermediateStateRoot<Self>;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 frame_support::parameter_types! {
@@ -355,10 +366,11 @@ impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
 }
 
 impl pallet_base_fee::Config for Runtime {
-	type Event = Event;
 	type Threshold = BaseFeeThreshold;
 	type IsActive = IsActive;
 	type DefaultBaseFeePerGas = DefaultBaseFeePerGas;
+	type RuntimeEvent = RuntimeEvent;
+	type DefaultElasticity = DefaultElasticity;
 }
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
@@ -436,7 +448,7 @@ pub type UncheckedExtrinsic =
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = fp_self_contained::CheckedExtrinsic<AccountId, Call, SignedExtra, H160>;
 /// The payload being signed in transactions.
-pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
+pub type SignedPayload = generic::SignedPayload<Call<T>, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
